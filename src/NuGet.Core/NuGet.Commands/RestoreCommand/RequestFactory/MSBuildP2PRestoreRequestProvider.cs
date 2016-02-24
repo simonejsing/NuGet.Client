@@ -5,48 +5,51 @@ using System.Linq;
 using System.Threading.Tasks;
 using NuGet.Common;
 using NuGet.Configuration;
-using NuGet.Logging;
 using NuGet.ProjectModel;
-using NuGet.Protocol.Core.Types;
 
 namespace NuGet.Commands
 {
     public class MSBuildP2PRestoreRequestProvider : IRestoreRequestProvider
     {
         private readonly RestoreCommandProvidersCache _providerCache;
-        private readonly RequestSettingsProvider _settingsProvider;
 
-        public MSBuildP2PRestoreRequestProvider(
-            RestoreCommandProvidersCache providerCache,
-            RequestSettingsProvider settingsProvider)
+        public MSBuildP2PRestoreRequestProvider(RestoreCommandProvidersCache providerCache)
         {
             _providerCache = providerCache;
-            _settingsProvider = settingsProvider;
         }
 
         public Task<IReadOnlyList<RestoreSummaryRequest>> CreateRequests(
             string inputPath,
-            string globalPackagesPath,
-            List<SourceRepository> sources,
-            SourceCacheContext cacheContext,
-            ILogger log)
+            RestoreArgs restoreContext)
         {
             var paths = new List<string>();
+            var requests = new List<RestoreSummaryRequest>();
+            var rootPath = Path.GetDirectoryName(inputPath);
 
-            if (Directory.Exists(inputPath))
-            {
-                paths.AddRange(GetProjectJsonFilesInDirectory(inputPath));
-            }
-            else
-            {
-                paths.Add(inputPath);
-            }
+            // Get settings relative to the input file
+            var settings = restoreContext.GetSettings(rootPath);
 
-            var requests = new List<RestoreSummaryRequest>(paths.Count);
+            var globalPath = restoreContext.GetEffectiveGlobalPackagesFolder(rootPath, settings);
 
-            foreach (var path in paths)
+            var lines = File.ReadAllLines(inputPath);
+            var msbuildProvider = new MSBuildProjectReferenceProvider(lines);
+
+            var entryPoints = msbuildProvider.GetEntryPoints();
+
+            // Create a request for each top level project with project.json
+            foreach (var entryPoint in entryPoints)
             {
-                requests.Add(Create(path, globalPackagesPath, sources, cacheContext, log));
+                if (entryPoint.PackageSpecPath != null && entryPoint.MSBuildProjectPath != null)
+                {
+                    var request = Create(
+                        globalPath,
+                        settings,
+                        entryPoint,
+                        msbuildProvider,
+                        restoreContext);
+
+                    requests.Add(request);
+                }
             }
 
             return Task.FromResult<IReadOnlyList<RestoreSummaryRequest>>(requests);
@@ -61,32 +64,34 @@ namespace NuGet.Commands
         }
 
         private RestoreSummaryRequest Create(
-            string inputPath,
-            string globalPackagesPath,
-            List<SourceRepository> sources,
-            SourceCacheContext cacheContext,
-            ILogger log)
+            string globalPath,
+            ISettings settings,
+            ExternalProjectReference project,
+            MSBuildProjectReferenceProvider msbuildProvider,
+            RestoreArgs restoreContext)
         {
-            var file = new FileInfo(inputPath);
-
-            // Get settings relative to the input file
-            var settings = _settingsProvider.GetSettings(file.DirectoryName);
-
-            // Use settings if the global path is null
-            // TODO: get effective path
-            var globalPath = globalPackagesPath ?? SettingsUtility.GetGlobalPackagesFolder(settings);
-
-            var sharedCache = _providerCache.GetOrCreate(globalPath, sources, cacheContext, log);
-
-            var project = JsonPackageSpecReader.GetPackageSpec(file.Directory.Name, file.FullName);
+            var sharedCache = _providerCache.GetOrCreate(
+                globalPath,
+                restoreContext.Sources,
+                restoreContext.CacheContext,
+                restoreContext.Log);
 
             var request = new RestoreRequest(
-                project,
+                project.PackageSpec,
                 sharedCache,
-                log,
+                restoreContext.Log,
                 disposeProviders: false);
 
-            var summaryRequest = new RestoreSummaryRequest(request, inputPath, settings, sources);
+            request.MaxDegreeOfConcurrency =
+                restoreContext.DisableParallel ? 1 : RestoreRequest.DefaultDegreeOfConcurrency;
+
+            request.ExternalProjects = msbuildProvider.GetReferences(project.MSBuildProjectPath).ToList();
+
+            var summaryRequest = new RestoreSummaryRequest(
+                request,
+                project.MSBuildProjectPath,
+                settings,
+                restoreContext.Sources);
 
             return summaryRequest;
         }

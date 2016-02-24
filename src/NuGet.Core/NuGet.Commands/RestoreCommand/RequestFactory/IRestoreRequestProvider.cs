@@ -1,7 +1,5 @@
 ﻿using System.Collections.Generic;
 using System.Threading.Tasks;
-using NuGet.Logging;
-using NuGet.Protocol.Core.Types;
 
 namespace NuGet.Commands
 {
@@ -13,13 +11,13 @@ namespace NuGet.Commands
         Task<bool> Supports(string path);
 
         /// <summary>
-        /// Create restore requests from a path.
+        /// Create RestoreRequest objects.
         /// </summary>
+        /// <param name="inputPath">Project.json or project file path.</param>
+        /// <param name="restoreContext">Command line arguments.</param>
+        /// <returns></returns>
         Task<IReadOnlyList<RestoreSummaryRequest>> CreateRequests(
             string inputPath,
-            string globalPackagesPath,
-            List<SourceRepository> sources,
-            SourceCacheContext cacheContext,
-            ILogger log);
+            RestoreArgs restoreContext);
     }
 }

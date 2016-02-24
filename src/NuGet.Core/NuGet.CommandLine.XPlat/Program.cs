@@ -108,7 +108,6 @@ namespace NuGet.CommandLine.XPlat
                     Strings.Switch_Verbosity,
                     CommandOptionType.SingleValue);
 
-
                 var argRoot = restore.Argument(
                     "[root]",
                     Strings.Restore_Arg_ProjectName_Description,
@@ -116,136 +115,37 @@ namespace NuGet.CommandLine.XPlat
 
                 restore.OnExecute(async () =>
                 {
-                    EnsureLog(GetLogLevel(verbosity));
+                    var logLevel = GetLogLevel(verbosity);
+                    EnsureLog(logLevel);
 
-                    // Ignore casing on windows
-                    var comparer = RuntimeEnvironmentHelper.IsWindows ?
-                        StringComparer.OrdinalIgnoreCase
-                        : StringComparer.Ordinal;
-
-                    var inputValues = new HashSet<string>(comparer);
-
-                    if (argRoot.Values.Count < 1)
-                    {
-                        // Use the current directory if no path was given
-                        var workingDir = Path.GetFullPath(".");
-
-                        inputValues.UnionWith(GetProjectJsonFilesInDirectory(workingDir));
-                    }
-                    else
-                    {
-                        foreach (var inputPath in argRoot.Values)
-                        {
-                            var fullPath = Path.GetFullPath(inputPath);
-
-                            // For directories find all children
-                            if (Directory.Exists(inputPath))
-                            {
-                                inputValues.UnionWith(GetProjectJsonFilesInDirectory(fullPath));
-                            }
-                            else if (fullPath.EndsWith(".msbuildp2p", StringComparison.OrdinalIgnoreCase))
-                            {
-                                // Find all projects within an msbuildp2p file with project.json
-                                var msbuildProvider = MSBuildProjectReferenceProvider.Load(fullPath);
-                            }
-                            else
-                            {
-                                // Add the input directly
-                                inputValues.Add(fullPath);
-                            }
-                        }
-                    }
-
-                    // Run restores
-                    var isParallel = !disableParallel.HasValue() && !RuntimeEnvironmentHelper.IsMono;
-                    var maxTasks = isParallel ? MaxDegreesOfConcurrency : 1;
-
-                    if (maxTasks < 1)
-                    {
-                        maxTasks = 1;
-                    }
-
-                    if (isParallel)
-                    {
-                        Log.LogVerbose(string.Format(
-                            CultureInfo.CurrentCulture,
-                            Strings.Log_RunningParallelRestore,
-                            maxTasks));
-                    }
-                    else
-                    {
-                        Log.LogVerbose(Strings.Log_RunningNonParallelRestore);
-                    }
-
-                    var providerCache = new RestoreCommandProvidersCache();
-
-                    var restoreSummaries = new List<RestoreSummary>();
-                    var restoreTasks = new List<Task<RestoreSummary>>(maxTasks);
                     using (var cacheContext = new SourceCacheContext())
                     {
-                        foreach (var inputPath in inputValues)
+                        var providerCache = new RestoreCommandProvidersCache();
+
+                        // Ordered request providers
+                        var providers = new List<IRestoreRequestProvider>();
+                        providers.Add(new MSBuildP2PRestoreRequestProvider(providerCache));
+                        providers.Add(new ProjectJsonRestoreRequestProvider(providerCache));
+
+                        var restoreContext = new RestoreArgs()
                         {
-                            // Global folder
-                            // Load settings based on the current project path.
-                            var projectDir = Path.GetDirectoryName(inputPath);
-                            string configFileName = configFile.HasValue() ? configFile.Value() : null;
-                            var settings = Settings.LoadDefaultSettings(projectDir,
-                                configFileName,
-                                machineWideSettings: new CommandLineXPlatMachineWideSetting());
+                            CacheContext = cacheContext,
+                            ConfigFileName = configFile.HasValue() ? configFile.Value() : null,
+                            DisableParallel = disableParallel.HasValue(),
+                            GlobalPackagesFolder = packagesDirectory.HasValue() ? packagesDirectory.Value() : null,
+                            Inputs = new List<string>(argRoot.Values),
+                            Log = Log,
+                            LogLevel = logLevel,
+                            MachineWideSettings = new CommandLineXPlatMachineWideSetting(),
+                            RequestProviders = providers,
+                            Sources = sources.Values,
+                            FallbackSources = fallBack.Values,
+                            CachingSourceProvider = _sourceProvider
+                        };
 
-                            var globalFolderPath = string.Empty;
-                            if (packagesDirectory.HasValue())
-                            {
-                                globalFolderPath = packagesDirectory.Value();
-                            }
-                            else
-                            {
-                                globalFolderPath = SettingsUtility.GetGlobalPackagesFolder(settings);
-                            }
+                        restoreContext.Runtimes.UnionWith(runtime.Values);
 
-                            var packageSources = GetSources(sources, fallBack, settings);
-
-                            // Find the shared local cache for globalFolderPath
-                            // The global folder may differ between projects
-                            var collectorLog = new CollectorLogger(Log);
-
-                            var sharedCache = providerCache.GetOrCreate(
-                                globalFolderPath,
-                                packageSources,
-                                cacheContext,
-                                collectorLog);
-
-                            // Throttle and wait for a task to finish if we have hit the limit
-                            if (restoreTasks.Count == maxTasks)
-                            {
-                                var restoreSummary = await CompleteTaskAsync(restoreTasks);
-                                restoreSummaries.Add(restoreSummary);
-                            }
-
-                            // Start a new restore
-                            var task = Task.Run((async () => await Program.ExecuteRestoreAsync(
-                                packageSources,
-                                fallBack,
-                                runtime,
-                                sharedCache,
-                                settings,
-                                isParallel,
-                                inputPath,
-                                collectorLog)));
-
-                            restoreTasks.Add(task);
-                        }
-
-                        // Wait for all restores to finish
-                        while (restoreTasks.Count > 0)
-                        {
-                            var restoreSummary = await CompleteTaskAsync(restoreTasks);
-                            restoreSummaries.Add(restoreSummary);
-                        }
-
-                        RestoreSummary.Log(Log, restoreSummaries, GetLogLevel(verbosity) < LogLevel.Minimal);
-
-                        return restoreSummaries.All(x => x.Success) ? 0 : 1;
+                        return await RestoreRunner.Run(restoreContext);
                     }
                 });
             }));
@@ -302,13 +202,6 @@ namespace NuGet.CommandLine.XPlat
                     $"NuGet xplat");
         }
 
-        private static async Task<RestoreSummary> CompleteTaskAsync(List<Task<RestoreSummary>> restoreTasks)
-        {
-            var doneTask = await Task.WhenAny(restoreTasks);
-            restoreTasks.Remove(doneTask);
-            return await doneTask;
-        }
-
         private static void EnsureLog(LogLevel logLevel)
         {
             // Set up logging.
@@ -333,171 +226,6 @@ namespace NuGet.CommandLine.XPlat
                 ServicePointManager.DefaultConnectionLimit = 1;
             }
 #endif
-        }
-
-        private static IEnumerable<string> GetProjectJsonFilesInDirectory(string path)
-        {
-            return Directory.GetFiles(path, "*project.json", SearchOption.AllDirectories)
-                .Where(file => ProjectJsonPathUtilities.IsProjectConfig(file))
-                .ToList();
-        }
-
-        private static async Task<RestoreSummary> ExecuteRestoreAsync
-            (List<SourceRepository> sources,
-            CommandOption fallBack,
-            CommandOption runtime,
-            RestoreCommandProviders sharedCache,
-            ISettings settings,
-            bool isParallel,
-            string inputPath,
-            CollectorLogger logger)
-        {
-            // Figure out the project directory
-            IEnumerable<string> externalProjects = null;
-
-            PackageSpec project;
-            var projectPath = Path.GetFullPath(inputPath);
-            var pathExtension = Path.GetExtension(projectPath);
-            var pathFileName = Path.GetFileName(projectPath);
-
-            if (string.Equals(
-                PackageSpec.PackageSpecFileName,
-                pathFileName,
-                StringComparison.OrdinalIgnoreCase))
-            {
-                logger.LogVerbose(string.Format(
-                    CultureInfo.CurrentCulture,
-                    Strings.Log_ReadingProject,
-                    inputPath));
-
-                projectPath = Path.GetDirectoryName(projectPath);
-                project = JsonPackageSpecReader.GetPackageSpec(Path.GetFileName(projectPath), inputPath);
-            }
-            else if (StringComparer.OrdinalIgnoreCase.Equals(pathExtension, ".msbuildp2p"))
-            {
-                
-            }
-            else
-            {
-                var file = Path.Combine(projectPath, PackageSpec.PackageSpecFileName);
-
-                logger.LogVerbose(string.Format(
-                    CultureInfo.CurrentCulture,
-                    Strings.Log_ReadingProject,
-                    file));
-
-                project = JsonPackageSpecReader.GetPackageSpec(Path.GetFileName(projectPath), file);
-            }
-
-            logger.LogVerbose(string.Format(
-                    CultureInfo.CurrentCulture,
-                    Strings.Log_LoadedProject,
-                    project.Name, project.FilePath));
-
-            // Resolve the root directory
-            var rootDirectory = PackageSpecResolver.ResolveRootDirectory(projectPath);
-            logger.LogVerbose(string.Format(
-                CultureInfo.CurrentCulture,
-                Strings.Log_FoundProjectRoot,
-                rootDirectory));
-
-            using (var request = new RestoreRequest(
-                project,
-                sharedCache,
-                logger,
-                disposeProviders: false))
-            {
-                // Resolve the packages directory
-                logger.LogVerbose(string.Format(
-                    CultureInfo.CurrentCulture,
-                    Strings.Log_UsingPackagesDirectory,
-                    request.PackagesDirectory));
-
-                request.DependencyProviders = sharedCache;
-
-                if (externalProjects != null)
-                {
-                    foreach (var externalReference in externalProjects)
-                    {
-                        var dirName = Path.GetDirectoryName(externalReference);
-                        var specPath = Path.Combine(dirName, PackageSpec.PackageSpecFileName);
-
-                        request.ExternalProjects.Add(
-                            new ExternalProjectReference(
-                                externalReference,
-                                JsonPackageSpecReader.GetPackageSpec(externalReference, specPath),
-                                msbuildProjectPath: null,
-                                projectReferences: Enumerable.Empty<string>()));
-                    }
-                }
-
-                // Runtime ids
-                request.RequestedRuntimes.UnionWith(runtime.Values);
-
-                var runtimeEnvironment = PlatformServices.Default.Runtime;
-
-                request.MaxDegreeOfConcurrency = isParallel ? RestoreRequest.DefaultDegreeOfConcurrency : 1;
-
-                // Run the restore
-                var command = new RestoreCommand(request);
-                var sw = Stopwatch.StartNew();
-                var result = await command.ExecuteAsync();
-
-                // Commit the result
-                logger.LogInformation(Strings.Log_Committing);
-                result.Commit(logger);
-
-                sw.Stop();
-
-                if (result.Success)
-                {
-                    logger.LogMinimal(string.Format(
-                        CultureInfo.CurrentCulture,
-                        Strings.Log_RestoreComplete,
-                        sw.ElapsedMilliseconds));
-                }
-                else
-                {
-                    logger.LogMinimal(string.Format(
-                        CultureInfo.CurrentCulture,
-                        Strings.Log_RestoreFailed,
-                        sw.ElapsedMilliseconds));
-                }
-
-                // Build the summary
-                return new RestoreSummary(result, inputPath, settings, sources, logger.Errors);
-            }
-        }
-
-        /// <summary>
-        /// Returns a unique list of sources. New sources will be cached
-        /// and shared between restores.
-        /// </summary>
-        private static List<SourceRepository> GetSources(
-            CommandOption sources,
-            CommandOption fallBack,
-            ISettings settings)
-        {
-
-            // CommandLineSourceRepositoryProvider caches repositories to avoid duplicates
-            var packageSourceProvider = new PackageSourceProvider(settings);
-
-            // Take the passed in sources
-            var packageSources = sources.Values.Select(s => new PackageSource(s));
-
-            // If no sources were passed in use the NuGet.Config sources
-            if (!packageSources.Any())
-            {
-                // Add enabled sources
-                packageSources = packageSourceProvider.LoadPackageSources().Where(source => source.IsEnabled);
-            }
-
-            packageSources = packageSources.Concat(
-                fallBack.Values.Select(s => new PackageSource(s)));
-
-            return packageSources.Select(source => _sourceProvider.CreateRepository(source))
-                .Distinct()
-                .ToList();
         }
 
         // Create a caching source provider with the default settings, the sources will be passed in

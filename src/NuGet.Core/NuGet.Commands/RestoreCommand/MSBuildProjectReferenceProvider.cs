@@ -91,6 +91,18 @@ namespace NuGet.Commands
             return results;
         }
 
+        public IReadOnlyList<ExternalProjectReference> GetEntryPoints()
+        {
+            var results = new List<ExternalProjectReference>();
+
+            foreach (var path in _cache.Keys)
+            {
+                results.Add(_cache[path][path]);
+            }
+
+            return results;
+        }
+
         public PackageSpec GetProjectJson(string path)
         {
             PackageSpec projectJson;

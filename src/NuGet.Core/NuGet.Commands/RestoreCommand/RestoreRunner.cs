@@ -2,74 +2,74 @@
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Globalization;
+using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using NuGet.Common;
-using NuGet.Configuration;
 using NuGet.Logging;
-using NuGet.Protocol.Core.Types;
 
 namespace NuGet.Commands
 {
-    public class RestoreRunner
+    public static class RestoreRunner
     {
-        private readonly IReadOnlyList<IRestoreRequestProvider> _providers;
-        private readonly ISettings _settings;
-        private static readonly int MaxDegreesOfConcurrency = Environment.ProcessorCount;
-        private readonly List<SourceRepository> _sources;
-        private readonly SourceCacheContext _cacheContext;
-
-        public RestoreRunner(
-            List<IRestoreRequestProvider> providers,
-            ISettings settings,
-            List<SourceRepository> sources,
-            SourceCacheContext cacheContext)
+        public static async Task<int> Run(RestoreArgs restoreContext)
         {
-            _providers = providers;
-            _settings = settings;
-            _sources = sources;
-            _cacheContext = cacheContext;
+            var maxTasks = 1;
 
-            DisableParallel = RuntimeEnvironmentHelper.IsMono;
-        }
-
-        public async Task<int> Run(ILogger log, IEnumerable<string> inputs, LogLevel logLevel)
-        {
-            var maxTasks = DisableParallel ? 1 : MaxDegreesOfConcurrency;
+            if (!restoreContext.DisableParallel && !RuntimeEnvironmentHelper.IsMono)
+            {
+                maxTasks = RestoreRequest.DefaultDegreeOfConcurrency;
+            }
 
             if (maxTasks < 1)
             {
                 maxTasks = 1;
             }
 
-            // TODO: fix strings
-            if (!DisableParallel)
+            var log = restoreContext.Log;
+
+            if (maxTasks > 1)
             {
                 log.LogVerbose(string.Format(
                     CultureInfo.CurrentCulture,
-                    "Strings.Log_RunningParallelRestore",
+                    Strings.Log_RunningParallelRestore,
                     maxTasks));
             }
             else
             {
-                log.LogVerbose("Strings.Log_RunningNonParallelRestore");
+                log.LogVerbose(Strings.Log_RunningNonParallelRestore);
             }
 
             // Get requests
             var requests = new Queue<RestoreSummaryRequest>();
-            var restoreTasks = new List<Task<RestoreSummary>>();
-            var restoreSummaries = new List<RestoreSummary>();
+            var restoreTasks = new List<Task<RestoreSummary>>(maxTasks);
+            var restoreSummaries = new List<RestoreSummary>(requests.Count);
 
+            var inputs = new List<string>();
+
+            // If there are no inputs, use the current directory
+            if (!inputs.Any())
+            {
+                inputs.Add(Path.GetFullPath("."));
+            }
+
+            // Ignore casing on windows and mac
+            var comparer = (RuntimeEnvironmentHelper.IsWindows || RuntimeEnvironmentHelper.IsMacOSX) ?
+                StringComparer.OrdinalIgnoreCase
+                : StringComparer.Ordinal;
+
+            var uniqueRequest = new HashSet<string>(comparer);
+
+            // Create requests
             foreach (var input in inputs)
             {
-                foreach (var request in await CreateRequests(
-                    input,
-                    GlobalPackagesFolder,
-                    _sources,
-                    _cacheContext,
-                    log))
+                foreach (var request in await CreateRequests(input, restoreContext))
                 {
-                    requests.Enqueue(request);
+                    // De-dupe requests
+                    if (uniqueRequest.Add(request.Request.LockFilePath))
+                    {
+                        requests.Enqueue(request);
+                    }
                 }
             }
 
@@ -94,13 +94,20 @@ namespace NuGet.Commands
             }
 
             // Summary
-            RestoreSummary.Log(log, restoreSummaries, logLevel < LogLevel.Minimal);
+            RestoreSummary.Log(log, restoreSummaries, restoreContext.LogLevel < LogLevel.Minimal);
 
             return restoreSummaries.All(x => x.Success) ? 0 : 1;
         }
 
-        private async Task<RestoreSummary> Execute(RestoreSummaryRequest summaryRequest)
+        private static async Task<RestoreSummary> Execute(RestoreSummaryRequest summaryRequest)
         {
+            var log = summaryRequest.Request.Log;
+
+            log.LogVerbose(string.Format(
+                    CultureInfo.CurrentCulture,
+                    Strings.Log_ReadingProject,
+                    summaryRequest.InputPath));
+
             // Run the restore
             var request = summaryRequest.Request;
             var command = new RestoreCommand(request);
@@ -108,24 +115,28 @@ namespace NuGet.Commands
             var result = await command.ExecuteAsync();
 
             // Commit the result
-            request.Log.LogInformation("Strings.Log_Committing");
+            log.LogInformation(Strings.Log_Committing);
             result.Commit(request.Log);
 
             sw.Stop();
 
             if (result.Success)
             {
-                request.Log.LogMinimal(string.Format(
-                    CultureInfo.CurrentCulture,
-                    "Strings.Log_RestoreComplete",
-                    sw.ElapsedMilliseconds));
+                log.LogMinimal(
+                    summaryRequest.InputPath + Environment.NewLine +
+                        string.Format(
+                        CultureInfo.CurrentCulture,
+                        Strings.Log_RestoreComplete,
+                        sw.ElapsedMilliseconds));
             }
             else
             {
-                request.Log.LogMinimal(string.Format(
-                    CultureInfo.CurrentCulture,
-                    "Strings.Log_RestoreFailed",
-                    sw.ElapsedMilliseconds));
+                log.LogMinimal(
+                    summaryRequest.InputPath + Environment.NewLine +
+                        string.Format(
+                        CultureInfo.CurrentCulture,
+                        Strings.Log_RestoreFailed,
+                        sw.ElapsedMilliseconds));
             }
 
             // Build the summary
@@ -144,37 +155,25 @@ namespace NuGet.Commands
             return await doneTask;
         }
 
-        /// <summary>
-        /// Override parallel settings
-        /// </summary>
-        public bool DisableParallel { get; set; }
-
-        /// <summary>
-        /// Override the global folder location
-        /// </summary>
-        public string GlobalPackagesFolder { get; set; }
-
-        private async Task<IReadOnlyList<RestoreSummaryRequest>> CreateRequests(
+        private static async Task<IReadOnlyList<RestoreSummaryRequest>> CreateRequests(
             string input,
-            string globalPackagesPath,
-            List<SourceRepository> sources,
-            SourceCacheContext cacheContext,
-            ILogger log)
+            RestoreArgs restoreContext)
         {
-            foreach (var provider in _providers)
+            foreach (var provider in restoreContext.RequestProviders)
             {
                 if (await provider.Supports(input))
                 {
                     return await provider.CreateRequests(
                         input,
-                        globalPackagesPath,
-                        sources,
-                        cacheContext,
-                        log);
+                        restoreContext);
                 }
             }
 
-            throw new ArgumentException(input);
+            throw new InvalidOperationException(
+                string.Format(
+                    CultureInfo.CurrentCulture,
+                    Strings.Error_InvalidCommandLineInput,
+                    input));
         }
     }
 }

@@ -12,5 +12,10 @@ namespace NuGet.ProjectModel
         /// Get the full p2p closure from an msbuild project path.
         /// </summary>
         IReadOnlyList<ExternalProjectReference> GetReferences(string entryPointPath);
+
+        /// <summary>
+        /// Returns all known entry points.
+        /// </summary>
+        IReadOnlyList<ExternalProjectReference> GetEntryPoints();
     }
 }
