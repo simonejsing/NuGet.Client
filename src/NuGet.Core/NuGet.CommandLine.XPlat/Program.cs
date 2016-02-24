@@ -4,23 +4,16 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
-using System.Globalization;
-using System.IO;
 using System.Linq;
 using System.Net;
 using System.Reflection;
-using System.Threading.Tasks;
 using Microsoft.Dnx.Runtime.Common.CommandLine;
-using Microsoft.Extensions.PlatformAbstractions;
 using NuGet.Commands;
 using NuGet.Common;
 using NuGet.Configuration;
-using NuGet.DependencyResolver;
 using NuGet.Logging;
-using NuGet.ProjectModel;
 using NuGet.Protocol.Core.Types;
 using NuGet.Protocol.Core.v3;
-using NuGet.Repositories;
 
 namespace NuGet.CommandLine.XPlat
 {

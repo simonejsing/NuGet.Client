@@ -222,7 +222,7 @@ namespace NuGet.CommandLine
             // Determine the type of the input and restore it appropriately
             // Inputs can be: project.json files or msbuild project files
 
-            if (BuildIntegratedProjectUtility.IsProjectConfig(inputPath))
+            if (ProjectJsonPathUtilities.IsProjectConfig(inputPath))
             {
                 // Restore a project.json file using the directory as the Id
                 logger.LogVerbose($"Reading project file {Arguments[0]}");
@@ -239,7 +239,7 @@ namespace NuGet.CommandLine
             else
             {
                 projectName = Path.GetFileNameWithoutExtension(inputPath);
-                projectJsonPath = BuildIntegratedProjectUtility.GetProjectConfigPath(projectDirectory, projectName);
+                projectJsonPath = ProjectJsonPathUtilities.GetProjectConfigPath(projectDirectory, projectName);
             }
 
             if (projectJsonPath == null || !File.Exists(projectJsonPath))
@@ -291,7 +291,7 @@ namespace NuGet.CommandLine
                 sharedCache.CacheContext.NoCache = NoCache;
 
                 // Read the existing lock file, this is needed to support IsLocked=true
-                var lockFilePath = BuildIntegratedProjectUtility.GetLockFilePath(projectJsonPath);
+                var lockFilePath = ProjectJsonPathUtilities.GetLockFilePath(projectJsonPath);
                 request.LockFilePath = lockFilePath;
                 request.ExistingLockFile = BuildIntegratedRestoreUtility.GetLockFile(lockFilePath, logger);
 
@@ -542,7 +542,7 @@ namespace NuGet.CommandLine
                 var projectFilePath = Path.GetFullPath(Arguments.First());
                 var projectFileName = Path.GetFileName(projectFilePath);
 
-                if (BuildIntegratedProjectUtility.IsProjectConfig(projectFileName))
+                if (ProjectJsonPathUtilities.IsProjectConfig(projectFileName))
                 {
                     if (File.Exists(projectFilePath))
                     {
@@ -586,7 +586,7 @@ namespace NuGet.CommandLine
                     var projectName = Path.GetFileNameWithoutExtension(projectFileName);
                     var dir = Path.GetDirectoryName(projectFilePath);
 
-                    var projectJsonPath = BuildIntegratedProjectUtility.GetProjectConfigPath(dir, projectName);
+                    var projectJsonPath = ProjectJsonPathUtilities.GetProjectConfigPath(dir, projectName);
                     var packagesConfigPath = GetPackageReferenceFile(projectFilePath);
 
                     // Check for project.json
@@ -782,7 +782,7 @@ namespace NuGet.CommandLine
                 // project.json
                 var dir = Path.GetDirectoryName(projectFile);
                 var projectName = Path.GetFileNameWithoutExtension(projectFile);
-                var projectJsonPath = BuildIntegratedProjectUtility.GetProjectConfigPath(dir, projectName);
+                var projectJsonPath = ProjectJsonPathUtilities.GetProjectConfigPath(dir, projectName);
 
                 // project.json overrides packages.config
                 if (File.Exists(projectJsonPath))

@@ -10,6 +10,7 @@ using System.Linq;
 using System.Reflection;
 using System.Text;
 using Microsoft.Build.Evaluation;
+using NuGet.Commands;
 using NuGet.Common;
 
 namespace NuGet.CommandLine
