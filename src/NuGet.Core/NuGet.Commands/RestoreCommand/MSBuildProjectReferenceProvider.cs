@@ -71,6 +71,13 @@ namespace NuGet.Commands
             }
         }
 
+        public static MSBuildProjectReferenceProvider Load(string path)
+        {
+            var lines = File.ReadAllLines(path);
+
+            return new MSBuildProjectReferenceProvider(lines);
+        }
+
         public IReadOnlyList<ExternalProjectReference> GetReferences(string entryPointPath)
         {
             var results = new List<ExternalProjectReference>();

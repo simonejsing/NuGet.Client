@@ -143,6 +143,11 @@ namespace NuGet.CommandLine.XPlat
                             {
                                 inputValues.UnionWith(GetProjectJsonFilesInDirectory(fullPath));
                             }
+                            else if (fullPath.EndsWith(".msbuildp2p", StringComparison.OrdinalIgnoreCase))
+                            {
+                                // Find all projects within an msbuildp2p file with project.json
+                                var msbuildProvider = MSBuildProjectReferenceProvider.Load(fullPath);
+                            }
                             else
                             {
                                 // Add the input directly
@@ -332,7 +337,9 @@ namespace NuGet.CommandLine.XPlat
 
         private static IEnumerable<string> GetProjectJsonFilesInDirectory(string path)
         {
-            return Directory.GetFiles(path, "project.json", SearchOption.AllDirectories);
+            return Directory.GetFiles(path, "*project.json", SearchOption.AllDirectories)
+                .Where(file => ProjectJsonPathUtilities.IsProjectConfig(file))
+                .ToList();
         }
 
         private static async Task<RestoreSummary> ExecuteRestoreAsync
@@ -350,7 +357,13 @@ namespace NuGet.CommandLine.XPlat
 
             PackageSpec project;
             var projectPath = Path.GetFullPath(inputPath);
-            if (string.Equals(PackageSpec.PackageSpecFileName, Path.GetFileName(projectPath), StringComparison.OrdinalIgnoreCase))
+            var pathExtension = Path.GetExtension(projectPath);
+            var pathFileName = Path.GetFileName(projectPath);
+
+            if (string.Equals(
+                PackageSpec.PackageSpecFileName,
+                pathFileName,
+                StringComparison.OrdinalIgnoreCase))
             {
                 logger.LogVerbose(string.Format(
                     CultureInfo.CurrentCulture,
@@ -360,23 +373,9 @@ namespace NuGet.CommandLine.XPlat
                 projectPath = Path.GetDirectoryName(projectPath);
                 project = JsonPackageSpecReader.GetPackageSpec(Path.GetFileName(projectPath), inputPath);
             }
-            else if (MsBuildUtility.IsMsBuildBasedProject(projectPath))
+            else if (StringComparer.OrdinalIgnoreCase.Equals(pathExtension, ".msbuildp2p"))
             {
-#if DNXCORE50
-                                throw new NotSupportedException();
-#else
-                // TODO: This only finds the top level dependencies, the rest are found through folders?
-                externalProjects = MsBuildUtility.GetProjectReferences(projectPath);
-
-                var projectDirectory = Path.GetDirectoryName(Path.GetFullPath(projectPath));
-                var packageSpecFile = new FileInfo(Path.Combine(projectDirectory, PackageSpec.PackageSpecFileName));
-                var projectName = packageSpecFile.Directory.Name;
-
-                project = JsonPackageSpecReader.GetPackageSpec(projectName, packageSpecFile.FullName);
-                logger.LogVerbose(string.Format(
-                    CultureInfo.CurrentCulture,
-                    Strings.Log_ReadingProject, inputPath));
-#endif
+                
             }
             else
             {
