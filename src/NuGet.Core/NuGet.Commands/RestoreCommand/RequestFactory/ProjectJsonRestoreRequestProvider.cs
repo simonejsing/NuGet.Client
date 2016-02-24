@@ -65,7 +65,7 @@ namespace NuGet.Commands
 
             var sharedCache = _providerCache.GetOrCreate(
                 globalPath,
-                restoreContext.Sources,
+                sources,
                 restoreContext.CacheContext,
                 restoreContext.Log);
 
@@ -80,7 +80,7 @@ namespace NuGet.Commands
             request.MaxDegreeOfConcurrency = 
                 restoreContext.DisableParallel ? 1 : RestoreRequest.DefaultDegreeOfConcurrency;
 
-            var summaryRequest = new RestoreSummaryRequest(request, inputPath, settings, restoreContext.Sources);
+            var summaryRequest = new RestoreSummaryRequest(request, inputPath, settings, sources);
 
             return summaryRequest;
         }

@@ -70,9 +70,11 @@ namespace NuGet.Commands
             MSBuildProjectReferenceProvider msbuildProvider,
             RestoreArgs restoreContext)
         {
+            var sources = restoreContext.GetEffectiveSources(settings);
+
             var sharedCache = _providerCache.GetOrCreate(
                 globalPath,
-                restoreContext.Sources,
+                sources,
                 restoreContext.CacheContext,
                 restoreContext.Log);
 
@@ -91,7 +93,7 @@ namespace NuGet.Commands
                 request,
                 project.MSBuildProjectPath,
                 settings,
-                restoreContext.Sources);
+                sources);
 
             return summaryRequest;
         }
