@@ -208,7 +208,7 @@ namespace NuGet.CommandLine
 
         private async Task<RestoreSummary> PerformNuGetV3RestoreAsync(
             string inputPath,
-            ProjectReferenceCache projectReferences,
+            MSBuildProjectReferenceProvider projectReferences,
             List<SourceRepository> repositories,
             RestoreCommandProviders sharedCache,
             CollectorLogger logger)
@@ -800,7 +800,7 @@ namespace NuGet.CommandLine
         {
             public PackageRestoreInputs()
             {
-                ProjectReferenceLookup = new ProjectReferenceCache(Enumerable.Empty<string>());
+                ProjectReferenceLookup = new MSBuildProjectReferenceProvider(Enumerable.Empty<string>());
             }
 
             public bool RestoringWithSolutionFile => !string.IsNullOrEmpty(DirectoryOfSolutionFile);
@@ -811,7 +811,7 @@ namespace NuGet.CommandLine
 
             public List<string> V3RestoreFiles { get; } = new List<string>();
 
-            public ProjectReferenceCache ProjectReferenceLookup { get; set; }
+            public MSBuildProjectReferenceProvider ProjectReferenceLookup { get; set; }
         }
     }
 }

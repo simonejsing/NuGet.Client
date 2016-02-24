@@ -3,12 +3,12 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
-using NuGet.ProjectManagement;
+using NuGet.Common;
 using NuGet.ProjectModel;
 
-namespace NuGet.CommandLine
+namespace NuGet.Commands
 {
-    public class ProjectReferenceCache
+    public class MSBuildProjectReferenceProvider : IExternalProjectReferenceProvider
     {
         private Dictionary<string, Dictionary<string, ExternalProjectReference>> _cache
             = new Dictionary<string, Dictionary<string, ExternalProjectReference>>(StringComparer.OrdinalIgnoreCase);
@@ -16,7 +16,7 @@ namespace NuGet.CommandLine
         private Dictionary<string, PackageSpec> _projectJsonCache
             = new Dictionary<string, PackageSpec>(StringComparer.OrdinalIgnoreCase);
 
-        public ProjectReferenceCache(IEnumerable<string> msbuildOutputLines)
+        public MSBuildProjectReferenceProvider(IEnumerable<string> msbuildOutputLines)
         {
             var lookup = new Dictionary<string, Dictionary<string, HashSet<string>>>(StringComparer.OrdinalIgnoreCase);
 
@@ -71,7 +71,7 @@ namespace NuGet.CommandLine
             }
         }
 
-        public List<ExternalProjectReference> GetReferences(string entryPointPath)
+        public IReadOnlyList<ExternalProjectReference> GetReferences(string entryPointPath)
         {
             var results = new List<ExternalProjectReference>();
 
@@ -149,12 +149,12 @@ namespace NuGet.CommandLine
                 // Only project.json is allowed
                 path = Path.Combine(
                     directory,
-                    BuildIntegratedProjectUtility.ProjectConfigFileName);
+                    PackageSpec.PackageSpecFileName);
             }
             else
             {
                 // Allow project.json or projectName.project.json
-                path = BuildIntegratedProjectUtility.GetProjectConfigPath(directory, projectName);
+                path = ProjectJsonPathUtilities.GetProjectConfigPath(directory, projectName);
             }
 
             // Read the file if it exists and is not cached already

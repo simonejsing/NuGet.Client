@@ -120,7 +120,6 @@
     <Compile Include="PackageServer.cs" />
     <Compile Include="PackageSourceBuilder.cs" />
     <Compile Include="Program.cs" />
-    <Compile Include="ProjectReferenceCache.cs" />
     <Compile Include="Rules\DefaultPackageRuleSet.cs" />
     <Compile Include="Rules\InitScriptNotUnderToolsRule.cs" />
     <Compile Include="Rules\InvalidFrameworkFolderRule.cs" />

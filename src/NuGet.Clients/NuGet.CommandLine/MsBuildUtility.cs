@@ -40,7 +40,7 @@ namespace NuGet.CommandLine
         /// <summary>
         /// Returns the closure of project references for projects specified in <paramref name="projectPaths"/>.
         /// </summary>
-        public static ProjectReferenceCache GetProjectReferences(
+        public static MSBuildProjectReferenceProvider GetProjectReferences(
             string msbuildDirectory,
             string[] projectPaths,
             int timeOut)
@@ -132,7 +132,7 @@ namespace NuGet.CommandLine
                     lines = File.ReadAllLines(resultsPath);
                 }
 
-                return new ProjectReferenceCache(lines);
+                return new MSBuildProjectReferenceProvider(lines);
             }
         }
 

@@ -10,6 +10,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using NuGet.Commands;
+using NuGet.Common;
 using NuGet.Packaging;
 using NuGet.Packaging.Core;
 using NuGet.ProjectManagement;
@@ -103,7 +104,7 @@ namespace NuGet.PackageManagement
                 request.LockFileVersion = await GetLockFileVersion(project, context);
 
                 // Add the existing lock file if it exists
-                var lockFilePath = BuildIntegratedProjectUtility.GetLockFilePath(project.JsonConfigPath);
+                var lockFilePath = ProjectJsonPathUtilities.GetLockFilePath(project.JsonConfigPath);
                 request.LockFilePath = lockFilePath;
                 request.ExistingLockFile = GetLockFile(lockFilePath, logger);
 
@@ -276,7 +277,7 @@ namespace NuGet.PackageManagement
             // Validate project.lock.json files
             foreach (var project in projects)
             {
-                var lockFilePath = BuildIntegratedProjectUtility.GetLockFilePath(project.JsonConfigPath);
+                var lockFilePath = ProjectJsonPathUtilities.GetLockFilePath(project.JsonConfigPath);
 
                 if (!File.Exists(lockFilePath))
                 {
