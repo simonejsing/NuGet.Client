@@ -79,8 +79,11 @@ namespace NuGet.CommandLine
                 restoreSummaries.Add(v2RestoreResult);
             }
 
-            if (restoreInputs.V3RestoreFiles.Count > 0)
+            if (restoreInputs.RestoreV3Context.Inputs.Any())
             {
+                // TODO: no cache context
+                var v3ExitCode = await RestoreRunner.Run(restoreInputs.RestoreV3Context);
+
                 // Read the settings outside of parallel loops.
                 ReadSettings(restoreInputs);
 
@@ -500,6 +503,7 @@ namespace NuGet.CommandLine
         private PackageRestoreInputs DetermineRestoreInputs()
         {
             var packageRestoreInputs = new PackageRestoreInputs();
+
             if (Arguments.Count == 0)
             {
                 // look for solution files first
@@ -527,6 +531,14 @@ namespace NuGet.CommandLine
 
                     packageRestoreInputs.PackageReferenceFiles.Add(packagesConfigFileFullPath);
                 }
+                else if (Directory.GetFiles(
+                    Directory.GetCurrentDirectory(),
+                    $"*{ProjectJsonPathUtilities.ProjectConfigFileName}",
+                    SearchOption.AllDirectories).Length > 0)
+                {
+                    // V3 recursive project.json search
+                    packageRestoreInputs.RestoreV3Context.Inputs.Add(Directory.GetCurrentDirectory());
+                }
                 else
                 {
                     throw new InvalidOperationException(
@@ -536,87 +548,92 @@ namespace NuGet.CommandLine
             }
             else
             {
-                // An argument was passed in. It might be a solution file or directory,
-                // project file, project.json, or packages.config file
-
-                var projectFilePath = Path.GetFullPath(Arguments.First());
-                var projectFileName = Path.GetFileName(projectFilePath);
-
-                if (ProjectJsonPathUtilities.IsProjectConfig(projectFileName))
+                foreach (var argument in Arguments)
                 {
-                    if (File.Exists(projectFilePath))
+                    // An argument was passed in. It might be a solution file or directory,
+                    // project file, project.json, or packages.config file
+
+                    var projectFilePath = Path.GetFullPath(argument);
+                    var projectFileName = Path.GetFileName(projectFilePath);
+
+                    if (ProjectJsonPathUtilities.IsProjectConfig(projectFileName))
                     {
-                        // project.json or projName.project.json
-                        packageRestoreInputs.V3RestoreFiles.Add(projectFilePath);
+                        if (File.Exists(projectFilePath))
+                        {
+                            // project.json or projName.project.json
+                            packageRestoreInputs.RestoreV3Context.Inputs.Add(projectFilePath);
+                        }
+                        else
+                        {
+                            var message = string.Format(
+                                CultureInfo.CurrentCulture,
+                                LocalizedResourceManager.GetString("RestoreCommandFileNotFound"),
+                                projectFilePath);
+
+                            throw new InvalidOperationException(message);
+                        }
+                    }
+                    else if (string.Equals(projectFileName, Constants.PackageReferenceFile)
+                        || (projectFileName.StartsWith("packages.", StringComparison.OrdinalIgnoreCase)
+                        && string.Equals(
+                            Path.GetExtension(projectFileName),
+                            Path.GetExtension(Constants.PackageReferenceFile), StringComparison.OrdinalIgnoreCase)))
+                    {
+                        // restoring from packages.config or packages.projectname.config file
+                        packageRestoreInputs.PackageReferenceFiles.Add(projectFilePath);
+                    }
+                    else if (MsBuildUtility.IsMsBuildBasedProject(projectFileName))
+                    {
+                        if (!File.Exists(projectFilePath))
+                        {
+                            var message = string.Format(
+                                CultureInfo.CurrentCulture,
+                                LocalizedResourceManager.GetString("RestoreCommandFileNotFound"),
+                                projectFilePath);
+
+                            throw new InvalidOperationException(message);
+                        }
+
+                        // For msbuild files find the project.json or packages.config file,
+                        // if neither exist skip it
+
+                        var projectName = Path.GetFileNameWithoutExtension(projectFileName);
+                        var dir = Path.GetDirectoryName(projectFilePath);
+
+                        var projectJsonPath = ProjectJsonPathUtilities.GetProjectConfigPath(dir, projectName);
+                        var packagesConfigPath = GetPackageReferenceFile(projectFilePath);
+
+                        // Check for project.json
+                        if (File.Exists(projectJsonPath))
+                        {
+                            packageRestoreInputs.RestoreV3Context.Inputs.Add(projectFilePath);
+                        }
+                        else if (File.Exists(packagesConfigPath))
+                        {
+                            // Check for packages.config
+                            packageRestoreInputs.PackageReferenceFiles.Add(packagesConfigPath);
+                        }
+                    }
+                    else if (projectFileName.EndsWith(".msbuildp2p", StringComparison.OrdinalIgnoreCase))
+                    {
+                        packageRestoreInputs.RestoreV3Context.Inputs.Add(projectFileName);
                     }
                     else
                     {
-                        var message = string.Format(
-                            CultureInfo.CurrentCulture,
-                            LocalizedResourceManager.GetString("RestoreCommandFileNotFound"),
-                            projectFilePath);
+                        // Check if it is a solution file
+                        var solutionFileFullPath = GetSolutionFile(projectFilePath);
+                        if (solutionFileFullPath == null)
+                        {
+                            throw new InvalidOperationException(
+                                LocalizedResourceManager.GetString("Error_CannotLocateSolutionFile"));
+                        }
 
-                        throw new InvalidOperationException(message);
+                        ProcessSolutionFile(solutionFileFullPath, packageRestoreInputs);
                     }
-                }
-                else if (string.Equals(projectFileName, Constants.PackageReferenceFile)
-                    || (projectFileName.StartsWith("packages.", StringComparison.OrdinalIgnoreCase)
-                    && string.Equals(
-                        Path.GetExtension(projectFileName),
-                        Path.GetExtension(Constants.PackageReferenceFile), StringComparison.OrdinalIgnoreCase)))
-                {
-                    // restoring from packages.config or packages.projectname.config file
-                    packageRestoreInputs.PackageReferenceFiles.Add(projectFilePath);
-                }
-                else if (MsBuildUtility.IsMsBuildBasedProject(projectFileName))
-                {
-                    if (!File.Exists(projectFilePath))
-                    {
-                        var message = string.Format(
-                            CultureInfo.CurrentCulture,
-                            LocalizedResourceManager.GetString("RestoreCommandFileNotFound"),
-                            projectFilePath);
-
-                        throw new InvalidOperationException(message);
-                    }
-
-                    // For msbuild files find the project.json or packages.config file,
-                    // if neither exist skip it
-
-                    var projectName = Path.GetFileNameWithoutExtension(projectFileName);
-                    var dir = Path.GetDirectoryName(projectFilePath);
-
-                    var projectJsonPath = ProjectJsonPathUtilities.GetProjectConfigPath(dir, projectName);
-                    var packagesConfigPath = GetPackageReferenceFile(projectFilePath);
-
-                    // Check for project.json
-                    if (File.Exists(projectJsonPath))
-                    {
-                        packageRestoreInputs.V3RestoreFiles.Add(projectFilePath);
-                    }
-                    else if (File.Exists(packagesConfigPath))
-                    {
-                        // Check for packages.config
-                        packageRestoreInputs.PackageReferenceFiles.Add(packagesConfigPath);
-                    }
-                }
-                else
-                {
-                    // Check if it is a solution file
-                    var solutionFileFullPath = GetSolutionFile(projectFilePath);
-                    if (solutionFileFullPath == null)
-                    {
-                        throw new InvalidOperationException(
-                            LocalizedResourceManager.GetString("Error_CannotLocateSolutionFile"));
-                    }
-
-                    ProcessSolutionFile(solutionFileFullPath, packageRestoreInputs);
                 }
             }
 
-
-            var projectsWithPotentialP2PReferences = packageRestoreInputs
-                .V3RestoreFiles
+            var projectsWithPotentialP2PReferences = packageRestoreInputs.RestoreV3Context.Inputs
                 .Where(MsBuildUtility.IsMsBuildBasedProject)
                 .ToArray();
 
@@ -643,6 +660,9 @@ namespace NuGet.CommandLine
 
                 packageRestoreInputs.ProjectReferenceLookup = referencesLookup;
             }
+
+            // Create providers for v3
+            if (packageRestoreInputs.)
 
             return packageRestoreInputs;
         }
@@ -809,9 +829,9 @@ namespace NuGet.CommandLine
 
             public List<string> PackageReferenceFiles { get; } = new List<string>();
 
-            public List<string> V3RestoreFiles { get; } = new List<string>();
-
             public MSBuildProjectReferenceProvider ProjectReferenceLookup { get; set; }
+
+            public RestoreArgs RestoreV3Context { get; set; } = new RestoreArgs();
         }
     }
 }

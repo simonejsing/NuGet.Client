@@ -84,10 +84,14 @@ namespace NuGet.Commands
                 restoreContext.Log,
                 disposeProviders: false);
 
-            request.MaxDegreeOfConcurrency =
-                restoreContext.DisableParallel ? 1 : RestoreRequest.DefaultDegreeOfConcurrency;
+            restoreContext.ApplyStandardProperties(request);
 
-            request.ExternalProjects = msbuildProvider.GetReferences(project.MSBuildProjectPath).ToList();
+            // Find all external references
+            var externalReferences = msbuildProvider.GetReferences(project.MSBuildProjectPath).ToList();
+            request.ExternalProjects = externalReferences;
+
+            // Determine if this needs to fall back to an older lock file format
+            request.LockFileVersion = LockFileUtilities.GetLockFileVersion(externalReferences);
 
             var summaryRequest = new RestoreSummaryRequest(
                 request,

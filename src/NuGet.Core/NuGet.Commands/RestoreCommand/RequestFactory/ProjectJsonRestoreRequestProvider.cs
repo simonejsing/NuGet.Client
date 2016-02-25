@@ -77,8 +77,7 @@ namespace NuGet.Commands
                 restoreContext.Log,
                 disposeProviders: false);
 
-            request.MaxDegreeOfConcurrency = 
-                restoreContext.DisableParallel ? 1 : RestoreRequest.DefaultDegreeOfConcurrency;
+            restoreContext.ApplyStandardProperties(request);
 
             var summaryRequest = new RestoreSummaryRequest(request, inputPath, settings, sources);
 

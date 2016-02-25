@@ -6,8 +6,11 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
+using NuGet.Common;
 using NuGet.Configuration;
 using NuGet.Logging;
+using NuGet.Packaging;
+using NuGet.ProjectModel;
 using NuGet.Protocol.Core.Types;
 using NuGet.Protocol.Core.v3;
 
@@ -42,6 +45,8 @@ namespace NuGet.Commands
         public CachingSourceProvider CachingSourceProvider { get; set; }
 
         public List<IRestoreRequestProvider> RequestProviders { get; set; } = new List<IRestoreRequestProvider>();
+
+        public PackageSaveMode PackageSaveMode { get; set; } = PackageSaveMode.Defaultv3;
 
         public ISettings GetSettings(string projectDirectory)
         {
@@ -91,6 +96,19 @@ namespace NuGet.Commands
             return packageSources.Select(source => CachingSourceProvider.CreateRepository(source))
                 .Distinct()
                 .ToList();
+        }
+
+        public void ApplyStandardProperties(RestoreRequest request)
+        {
+            request.PackageSaveMode = PackageSaveMode;
+
+            // Read the existing lock file, this is needed to support IsLocked=true
+            var lockFilePath = ProjectJsonPathUtilities.GetLockFilePath(request.Project.FilePath);
+            request.LockFilePath = lockFilePath;
+            request.ExistingLockFile = LockFileUtilities.GetLockFile(lockFilePath, request.Log);
+
+            request.MaxDegreeOfConcurrency =
+                DisableParallel ? 1 : RestoreRequest.DefaultDegreeOfConcurrency;
         }
     }
 }
