@@ -44,7 +44,7 @@ namespace NuGet.Commands
             var restoreTasks = new List<Task<RestoreSummary>>(maxTasks);
             var restoreSummaries = new List<RestoreSummary>(requests.Count);
 
-            var inputs = new List<string>();
+            var inputs = new List<string>(restoreContext.Inputs);
 
             // If there are no inputs, use the current directory
             if (!inputs.Any())
@@ -82,7 +82,10 @@ namespace NuGet.Commands
                     restoreSummaries.Add(restoreSummary);
                 }
 
-                var task = Task.Run(async () => await Execute(requests.Dequeue()));
+                var request = requests.Dequeue();
+
+                var task = Task.Run(async () => await Execute(request));
+                restoreTasks.Add(task);
             }
 
             // Wait for all restores to finish

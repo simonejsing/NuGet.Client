@@ -122,6 +122,14 @@ namespace NuGet.CommandLine
                         restoreContext.PackageSaveMode = EffectivePackageSaveMode;
                     }
 
+                    // Override packages folder
+                    var globalPackagesFolder = SettingsUtility.GetGlobalPackagesFolder(Settings);
+                    restoreContext.GlobalPackagesFolder = GetEffectiveGlobalPackagesFolder(
+                                        PackagesDirectory,
+                                        SolutionDirectory,
+                                        restoreInputs,
+                                        globalPackagesFolder);
+
                     // Providers
                     restoreContext.RequestProviders.Add(new MSBuildRestoreRequestProvider(
                         providerCache,
