@@ -43,6 +43,11 @@ namespace NuGet.Commands
 
         public Task<bool> Supports(string path)
         {
+            if (path == null)
+            {
+                throw new ArgumentNullException(nameof(path));
+            }
+
             // True if dir or project.json file
             var result = Directory.Exists(path)
                 || (File.Exists(path) && ProjectJsonPathUtilities.IsProjectConfig(path));

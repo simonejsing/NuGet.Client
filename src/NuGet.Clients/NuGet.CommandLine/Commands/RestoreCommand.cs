@@ -19,6 +19,7 @@ using NuGet.ProjectManagement;
 using NuGet.ProjectModel;
 using NuGet.Protocol.Core.Types;
 using NuGet.Repositories;
+using NuGet.Protocol.Core.v3;
 
 namespace NuGet.CommandLine
 {
@@ -81,8 +82,45 @@ namespace NuGet.CommandLine
 
             if (restoreInputs.RestoreV3Context.Inputs.Any())
             {
-                // TODO: no cache context
-                var v3ExitCode = await RestoreRunner.Run(restoreInputs.RestoreV3Context);
+                var v3ExitCode = 0;
+
+                using (var cacheContext = new SourceCacheContext())
+                {
+                    var restoreContext = restoreInputs.RestoreV3Context;
+
+                    var providerCache = new RestoreCommandProvidersCache();
+
+                    // Add restore args to the restore context
+                    cacheContext.NoCache = NoCache;
+                    restoreContext.CacheContext = cacheContext;
+                    restoreContext.DisableParallel = DisableParallelProcessing;
+                    restoreContext.ConfigFileName = ConfigFile;
+                    restoreContext.MachineWideSettings = MachineWideSettings;
+                    restoreContext.Sources = Source.ToList();
+                    restoreContext.PackageSaveMode = EffectivePackageSaveMode;
+                    restoreContext.Log = Console;
+                    restoreContext.CachingSourceProvider = GetSourceRepositoryProvider();
+
+                    // Providers
+                    restoreContext.RequestProviders.Add(new MSB(providerCache));
+                    restoreContext.RequestProviders.Add(new MSBuildP2PRestoreRequestProvider(providerCache));
+                    restoreContext.RequestProviders.Add(new ProjectJsonRestoreRequestProvider(providerCache));
+
+                    // Verbosity
+                    restoreContext.LogLevel = LogLevel.Information;
+
+                    if (Verbosity == Verbosity.Quiet)
+                    {
+                        restoreContext.LogLevel = LogLevel.Warning;
+                    }
+                    else if (Verbosity == Verbosity.Detailed)
+                    {
+                        restoreContext.LogLevel = LogLevel.Verbose;
+                    }
+
+                    // Run restore
+                    v3ExitCode = await RestoreRunner.Run(restoreContext);
+                }
 
                 // Read the settings outside of parallel loops.
                 ReadSettings(restoreInputs);
@@ -333,9 +371,15 @@ namespace NuGet.CommandLine
             }
         }
 
-        private CommandLineSourceRepositoryProvider GetSourceRepositoryProvider()
+        private static CachingSourceProvider _sourceProvider;
+        private CachingSourceProvider GetSourceRepositoryProvider()
         {
-            return new CommandLineSourceRepositoryProvider(SourceProvider);
+            if (_sourceProvider == null)
+            {
+                _sourceProvider = new CachingSourceProvider(SourceProvider);
+            }
+
+            return _sourceProvider;
         }
 
         private void ReadSettings(PackageRestoreInputs packageRestoreInputs)
@@ -661,9 +705,6 @@ namespace NuGet.CommandLine
                 packageRestoreInputs.ProjectReferenceLookup = referencesLookup;
             }
 
-            // Create providers for v3
-            if (packageRestoreInputs.)
-
             return packageRestoreInputs;
         }
 
@@ -807,7 +848,7 @@ namespace NuGet.CommandLine
                 // project.json overrides packages.config
                 if (File.Exists(projectJsonPath))
                 {
-                    restoreInputs.V3RestoreFiles.Add(projectFile);
+                    restoreInputs.RestoreV3Context.Inputs.Add(projectFile);
                 }
                 else if (File.Exists(packagesConfigFilePath))
                 {

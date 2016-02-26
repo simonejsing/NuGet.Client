@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
-using NuGet.Common;
 using NuGet.Configuration;
 using NuGet.ProjectModel;
 
@@ -18,7 +17,7 @@ namespace NuGet.Commands
             _providerCache = providerCache;
         }
 
-        public Task<IReadOnlyList<RestoreSummaryRequest>> CreateRequests(
+        public virtual Task<IReadOnlyList<RestoreSummaryRequest>> CreateRequests(
             string inputPath,
             RestoreArgs restoreContext)
         {
@@ -55,15 +54,20 @@ namespace NuGet.Commands
             return Task.FromResult<IReadOnlyList<RestoreSummaryRequest>>(requests);
         }
 
-        public Task<bool> Supports(string path)
+        public virtual Task<bool> Supports(string path)
         {
+            if (path == null)
+            {
+                throw new ArgumentNullException(nameof(path));
+            }
+
             // True if dir or project.json file
             var result = (File.Exists(path) && path.EndsWith(".msbuildp2p", StringComparison.OrdinalIgnoreCase));
 
             return Task.FromResult(result);
         }
 
-        private RestoreSummaryRequest Create(
+        protected virtual RestoreSummaryRequest Create(
             string globalPath,
             ISettings settings,
             ExternalProjectReference project,
