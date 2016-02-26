@@ -128,7 +128,6 @@ namespace NuGet.CommandLine.XPlat
                             GlobalPackagesFolder = packagesDirectory.HasValue() ? packagesDirectory.Value() : null,
                             Inputs = new List<string>(argRoot.Values),
                             Log = Log,
-                            LogLevel = logLevel,
                             MachineWideSettings = new CommandLineXPlatMachineWideSetting(),
                             RequestProviders = providers,
                             Sources = sources.Values,
@@ -138,7 +137,12 @@ namespace NuGet.CommandLine.XPlat
 
                         restoreContext.Runtimes.UnionWith(runtime.Values);
 
-                        return await RestoreRunner.Run(restoreContext);
+                        var restoreSummaries = await RestoreRunner.Run(restoreContext);
+
+                        // Summary
+                        RestoreSummary.Log(Log, restoreSummaries, logLevel < LogLevel.Minimal);
+
+                        return restoreSummaries.All(x => x.Success) ? 0 : 1;
                     }
                 });
             }));

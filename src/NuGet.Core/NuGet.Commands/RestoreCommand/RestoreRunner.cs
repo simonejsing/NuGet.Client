@@ -6,13 +6,12 @@ using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using NuGet.Common;
-using NuGet.Logging;
 
 namespace NuGet.Commands
 {
     public static class RestoreRunner
     {
-        public static async Task<int> Run(RestoreArgs restoreContext)
+        public static async Task<IReadOnlyList<RestoreSummary>> Run(RestoreArgs restoreContext)
         {
             var maxTasks = 1;
 
@@ -94,9 +93,7 @@ namespace NuGet.Commands
             }
 
             // Summary
-            RestoreSummary.Log(log, restoreSummaries, restoreContext.LogLevel < LogLevel.Minimal);
-
-            return restoreSummaries.All(x => x.Success) ? 0 : 1;
+            return restoreSummaries;
         }
 
         private static async Task<RestoreSummary> Execute(RestoreSummaryRequest summaryRequest)

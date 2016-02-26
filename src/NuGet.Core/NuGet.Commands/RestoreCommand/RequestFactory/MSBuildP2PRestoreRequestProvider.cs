@@ -23,12 +23,6 @@ namespace NuGet.Commands
         {
             var paths = new List<string>();
             var requests = new List<RestoreSummaryRequest>();
-            var rootPath = Path.GetDirectoryName(inputPath);
-
-            // Get settings relative to the input file
-            var settings = restoreContext.GetSettings(rootPath);
-
-            var globalPath = restoreContext.GetEffectiveGlobalPackagesFolder(rootPath, settings);
 
             var lines = File.ReadAllLines(inputPath);
             var msbuildProvider = new MSBuildProjectReferenceProvider(lines);
@@ -41,8 +35,6 @@ namespace NuGet.Commands
                 if (entryPoint.PackageSpecPath != null && entryPoint.MSBuildProjectPath != null)
                 {
                     var request = Create(
-                        globalPath,
-                        settings,
                         entryPoint,
                         msbuildProvider,
                         restoreContext);
@@ -68,12 +60,15 @@ namespace NuGet.Commands
         }
 
         protected virtual RestoreSummaryRequest Create(
-            string globalPath,
-            ISettings settings,
             ExternalProjectReference project,
             MSBuildProjectReferenceProvider msbuildProvider,
             RestoreArgs restoreContext)
         {
+            // Get settings relative to the input file
+            var rootPath = Path.GetDirectoryName(project.PackageSpecPath);
+            var settings = restoreContext.GetSettings(rootPath);
+            var globalPath = restoreContext.GetEffectiveGlobalPackagesFolder(rootPath, settings);
+
             var sources = restoreContext.GetEffectiveSources(settings);
 
             var sharedCache = _providerCache.GetOrCreate(

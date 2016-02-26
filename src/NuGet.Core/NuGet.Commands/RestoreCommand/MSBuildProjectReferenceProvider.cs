@@ -10,14 +10,19 @@ namespace NuGet.Commands
 {
     public class MSBuildProjectReferenceProvider : IExternalProjectReferenceProvider
     {
-        private Dictionary<string, Dictionary<string, ExternalProjectReference>> _cache
+        private readonly Dictionary<string, Dictionary<string, ExternalProjectReference>> _cache
             = new Dictionary<string, Dictionary<string, ExternalProjectReference>>(StringComparer.OrdinalIgnoreCase);
 
-        private Dictionary<string, PackageSpec> _projectJsonCache
+        private readonly Dictionary<string, PackageSpec> _projectJsonCache
             = new Dictionary<string, PackageSpec>(StringComparer.OrdinalIgnoreCase);
 
         public MSBuildProjectReferenceProvider(IEnumerable<string> msbuildOutputLines)
         {
+            if (msbuildOutputLines == null)
+            {
+                throw new ArgumentNullException(nameof(msbuildOutputLines));
+            }
+
             var lookup = new Dictionary<string, Dictionary<string, HashSet<string>>>(StringComparer.OrdinalIgnoreCase);
 
             string entryPoint = null;
@@ -73,6 +78,11 @@ namespace NuGet.Commands
 
         public static MSBuildProjectReferenceProvider Load(string path)
         {
+            if (path == null)
+            {
+                throw new ArgumentNullException(nameof(path));
+            }
+
             var lines = File.ReadAllLines(path);
 
             return new MSBuildProjectReferenceProvider(lines);

@@ -32,6 +32,7 @@ namespace NuGet.Commands
             InputPath = inputPath;
 
             CollectorLogger = new CollectorLogger(request.Log);
+            request.Log = CollectorLogger;
         }
     }
 }

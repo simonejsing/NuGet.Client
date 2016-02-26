@@ -2,7 +2,6 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Text;
 using System.Threading.Tasks;
 using NuGet.Commands;
 
@@ -13,11 +12,22 @@ namespace NuGet.CommandLine
         private readonly RestoreCommandProvidersCache _providerCache;
         private readonly MSBuildProjectReferenceProvider _projectProvider;
 
+        /// <param name="rootPath">Solution root directory.</param>
         public MSBuildRestoreRequestProvider(
             RestoreCommandProvidersCache providerCache,
             MSBuildProjectReferenceProvider projectProvider)
             : base (providerCache)
         {
+            if (providerCache == null)
+            {
+                throw new ArgumentNullException(nameof(providerCache));
+            }
+
+            if (projectProvider == null)
+            {
+                throw new ArgumentNullException(nameof(projectProvider));
+            }
+
             _providerCache = providerCache;
             _projectProvider = projectProvider;
         }
@@ -33,7 +43,9 @@ namespace NuGet.CommandLine
             // Get settings relative to the input file
             var settings = restoreContext.GetSettings(rootPath);
 
-            var globalPath = restoreContext.GetEffectiveGlobalPackagesFolder(rootPath, settings);
+            var globalPath = restoreContext.GetEffectiveGlobalPackagesFolder(
+                rootPath,
+                settings);
 
             var entryPoints = _projectProvider.GetEntryPoints();
 
@@ -43,8 +55,6 @@ namespace NuGet.CommandLine
                 if (entryPoint.PackageSpecPath != null && entryPoint.MSBuildProjectPath != null)
                 {
                     var request = Create(
-                        globalPath,
-                        settings,
                         entryPoint,
                         _projectProvider,
                         restoreContext);

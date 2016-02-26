@@ -26,8 +26,6 @@ namespace NuGet.Commands
 
         public bool DisableParallel { get; set; }
 
-        public LogLevel LogLevel { get; set; }
-
         public HashSet<string> Runtimes { get; set; } = new HashSet<string>(StringComparer.Ordinal);
 
         public HashSet<string> FallbackRuntimes { get; set; }
