@@ -61,6 +61,7 @@ namespace NuGet.Commands.Test
                     CacheContext = new SourceCacheContext(),
                     DisableParallel = true,
                     GlobalPackagesFolder = packagesDir.FullName,
+                    Sources = new List<string>() { packageSource.FullName },
                     Inputs = new List<string>() { specPath1 },
                     Log = logger,
                     CachingSourceProvider = new CachingSourceProvider(new TestPackageSourceProvider(sources)),
@@ -75,9 +76,9 @@ namespace NuGet.Commands.Test
                 var summary = summaries.Single();
 
                 // Assert
-                Assert.True(summary.Success, string.Join(Environment.NewLine, logger.Messages));
+                Assert.True(summary.Success, "Failed: " + string.Join(Environment.NewLine, logger.Messages));
                 Assert.Equal(1, summary.FeedsUsed.Count);
-                Assert.True(File.Exists(lockPath));
+                Assert.True(File.Exists(lockPath), lockPath);
             }
         }
 
