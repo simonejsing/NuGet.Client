@@ -169,11 +169,18 @@ namespace NuGet.Commands
                 }
             }
 
-            throw new InvalidOperationException(
-                string.Format(
-                    CultureInfo.CurrentCulture,
-                    Strings.Error_InvalidCommandLineInput,
-                    input));
+            if (File.Exists(input) || Directory.Exists(input))
+            {
+                throw new InvalidOperationException(
+                    string.Format(
+                        CultureInfo.CurrentCulture,
+                        Strings.Error_InvalidCommandLineInput,
+                        input));
+            }
+            else
+            {
+                throw new FileNotFoundException(input);
+            }
         }
     }
 }

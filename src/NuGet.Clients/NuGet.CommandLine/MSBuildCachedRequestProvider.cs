@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
@@ -7,13 +8,13 @@ using NuGet.Commands;
 
 namespace NuGet.CommandLine
 {
-    public class MSBuildRestoreRequestProvider : MSBuildP2PRestoreRequestProvider
+    public class MSBuildCachedRequestProvider : MSBuildP2PRestoreRequestProvider
     {
         private readonly RestoreCommandProvidersCache _providerCache;
         private readonly MSBuildProjectReferenceProvider _projectProvider;
 
         /// <param name="rootPath">Solution root directory.</param>
-        public MSBuildRestoreRequestProvider(
+        public MSBuildCachedRequestProvider(
             RestoreCommandProvidersCache providerCache,
             MSBuildProjectReferenceProvider projectProvider)
             : base (providerCache)

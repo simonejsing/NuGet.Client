@@ -5,7 +5,6 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Threading.Tasks;
 using NuGet.Common;
 using NuGet.Configuration;
 using NuGet.Logging;
@@ -91,7 +90,9 @@ namespace NuGet.Commands
             packageSources = packageSources.Concat(
                 FallbackSources.Select(s => new PackageSource(s)));
 
-            return packageSources.Select(source => CachingSourceProvider.CreateRepository(source))
+            var cachingProvider = CachingSourceProvider ?? new CachingSourceProvider(packageSourceProvider);
+
+            return packageSources.Select(source => cachingProvider.CreateRepository(source))
                 .Distinct()
                 .ToList();
         }

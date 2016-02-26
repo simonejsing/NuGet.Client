@@ -253,6 +253,6 @@
     <value>Using packages directory: {0}.</value>
   </data>
   <data name="Error_InvalidCommandLineInput" xml:space="preserve">
-    <value>Invalid input '{0}' the file is an unknown format or could not be found on disk.</value>
+    <value>Invalid input '{0}'. The file type was not recognized.</value>
   </data>
 </root>

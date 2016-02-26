@@ -60,7 +60,7 @@ namespace NuGet.Commands {
         }
         
         /// <summary>
-        ///    Looks up a localized string similar to Invalid input &apos;{0}&apos; the file is an unknown format or could not be found on disk..
+        ///    Looks up a localized string similar to Invalid input &apos;{0}&apos;. The file type was not recognized..
         /// </summary>
         internal static string Error_InvalidCommandLineInput {
             get {

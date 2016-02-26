@@ -105,7 +105,7 @@
     <Compile Include="ExtensionLocator.cs" />
     <Compile Include="FileConflictAction.cs" />
     <Compile Include="ICommandManager.cs" />
-    <Compile Include="MSBuildRestoreRequestProvider.cs" />
+    <Compile Include="MSBuildCachedRequestProvider.cs" />
     <Compile Include="MSBuildTasks\ProjectReferencesTask.cs" />
     <Compile Include="MsBuildUtility.cs" />
     <Compile Include="NuGetCommand.Designer.cs">

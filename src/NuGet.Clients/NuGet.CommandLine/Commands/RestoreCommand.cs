@@ -131,7 +131,7 @@ namespace NuGet.CommandLine
                                         globalPackagesFolder);
 
                     // Providers
-                    restoreContext.RequestProviders.Add(new MSBuildRestoreRequestProvider(
+                    restoreContext.RequestProviders.Add(new MSBuildCachedRequestProvider(
                         providerCache,
                         restoreInputs.ProjectReferenceLookup));
                     restoreContext.RequestProviders.Add(new MSBuildP2PRestoreRequestProvider(providerCache));
@@ -667,7 +667,16 @@ namespace NuGet.CommandLine
                 // project.json overrides packages.config
                 if (File.Exists(projectJsonPath))
                 {
-                    restoreInputs.RestoreV3Context.Inputs.Add(projectFile);
+                    // For known msbuild project types use the project
+                    if (MsBuildUtility.IsMsBuildBasedProject(projectFile))
+                    {
+                        restoreInputs.RestoreV3Context.Inputs.Add(projectFile);
+                    }
+                    else
+                    {
+                        // For unknown types restore the project.json file without p2ps
+                        restoreInputs.RestoreV3Context.Inputs.Add(projectJsonPath);
+                    }
                 }
                 else if (File.Exists(packagesConfigFilePath))
                 {
