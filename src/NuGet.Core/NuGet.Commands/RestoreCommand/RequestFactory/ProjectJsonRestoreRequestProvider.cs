@@ -92,8 +92,8 @@ namespace NuGet.Commands
 
         private static List<string> GetProjectJsonFilesInDirectory(string path)
         {
-            return Directory.GetFiles(path, 
-                $"*{ProjectJsonPathUtilities.ProjectConfigFileName}", 
+            return Directory.GetFiles(path,
+                $"*{ProjectJsonPathUtilities.ProjectConfigFileName}",
                 SearchOption.AllDirectories)
                     .Where(file => ProjectJsonPathUtilities.IsProjectConfig(file))
                     .ToList();
