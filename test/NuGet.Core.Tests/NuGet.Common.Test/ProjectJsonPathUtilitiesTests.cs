@@ -193,7 +193,7 @@ namespace NuGet.Common.Test
         public void ProjectJsonPathUtilities_IsProjectConfig_True(string path)
         {
             // Arrange & Act
-            var result = ProjectJsonPathUtilities.IsProjectConfig(path);
+            var result = ProjectJsonPathUtilities.IsProjectConfig(ConvertToUnix(path));
 
             // Assert
             Assert.True(result);
@@ -215,7 +215,7 @@ namespace NuGet.Common.Test
         public void ProjectJsonPathUtilities_IsProjectConfig_False(string path)
         {
             // Arrange & Act
-            var result = ProjectJsonPathUtilities.IsProjectConfig(path);
+            var result = ProjectJsonPathUtilities.IsProjectConfig(ConvertToUnix(path));
 
             // Assert
             Assert.False(result);
@@ -231,15 +231,27 @@ namespace NuGet.Common.Test
         public void ProjectJsonPathUtilities_GetLockFilePath(string configPath, string lockFilePath)
         {
             // Arrange & Act
-            var result = ProjectJsonPathUtilities.GetLockFilePath(configPath);
+            var result = ProjectJsonPathUtilities.GetLockFilePath(ConvertToUnix(configPath));
 
             // Assert
-            Assert.Equal(lockFilePath, result);
+            Assert.Equal(ConvertToUnix(lockFilePath), result);
         }
 
         private static void CreateFile(string path)
         {
             File.OpenWrite(path).WriteByte(0);
+        }
+
+        private static string ConvertToUnix(string path)
+        {
+            if (!RuntimeEnvironmentHelper.IsWindows)
+            {
+                return path.Replace("c:\\", "/tmp/".Replace('\\', '/'));
+            }
+            else
+            {
+                return path;
+            }
         }
     }
 }

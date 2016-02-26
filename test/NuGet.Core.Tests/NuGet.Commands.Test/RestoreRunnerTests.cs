@@ -75,7 +75,7 @@ namespace NuGet.Commands.Test
                 var summary = summaries.Single();
 
                 // Assert
-                Assert.True(summary.Success);
+                Assert.True(summary.Success, string.Join(Environment.NewLine, logger.Messages));
                 Assert.Equal(1, summary.FeedsUsed.Count);
                 Assert.True(File.Exists(lockPath));
             }
