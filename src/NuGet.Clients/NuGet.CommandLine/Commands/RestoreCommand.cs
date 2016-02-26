@@ -24,7 +24,7 @@ using NuGet.Protocol.Core.v3;
 namespace NuGet.CommandLine
 {
     [Command(typeof(NuGetCommand), "restore", "RestoreCommandDescription",
-        MinArgs = 0, MaxArgs = 1, UsageSummaryResourceName = "RestoreCommandUsageSummary",
+        MinArgs = 0, MaxArgs = 128, UsageSummaryResourceName = "RestoreCommandUsageSummary",
         UsageDescriptionResourceName = "RestoreCommandUsageDescription",
         UsageExampleResourceName = "RestoreCommandUsageExamples")]
     public class RestoreCommand : DownloadCommandBase
