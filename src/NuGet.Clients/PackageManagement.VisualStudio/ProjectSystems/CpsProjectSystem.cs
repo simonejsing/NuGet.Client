@@ -8,8 +8,14 @@ using NuGet.ProjectManagement;
 using EnvDTEProject = EnvDTE.Project;
 using ThreadHelper = Microsoft.VisualStudio.Shell.ThreadHelper;
 #if VS14
-using NuGetVS = NuGet.VisualStudio14;
-
+using NuGetVS = NuGet.VisualStudio.Proxy;
+using EnvDTE.Proxy;
+using Microsoft.VisualStudio.Proxy;
+using Microsoft.VisualStudio.Shell.Interop.Proxy;
+using Microsoft.VisualStudio.ProjectSystem.Proxy;
+using Microsoft.VisualStudio.ProjectSystem.Designers.Proxy;
+using MsBuildProject = Microsoft.Build.Evaluation.Proxy.ProxyProject;
+using NuGet.VisualStudio.Proxy;
 #else
 using NuGetVS = NuGet.VisualStudio12;
 #endif
@@ -51,10 +57,12 @@ namespace NuGet.PackageManagement.VisualStudio
         {
             await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
 
-            await NuGetVS.ProjectHelper.DoWorkInWriterLockAsync(
-                EnvDTEProject,
-                VsHierarchyUtility.ToVsHierarchy(EnvDTEProject),
-                buildProject => MicrosoftBuildEvaluationProjectUtility.AddImportStatement(buildProject, relativeTargetPath, location));
+            // TODO: remove these wrappers when the proxy is present along the whole chain--we'll insert it here as a temp measure
+            ProxyProject proxyProject = new ProxyProject(EnvDTEProject);
+            await DoWorkInWriterLockAsync(
+                proxyProject,
+                new ProxyVsHierarchy(VsHierarchyUtility.ToVsHierarchy(EnvDTEProject)),
+                buildProject => MicrosoftBuildEvaluationProjectUtility.AddImportStatement(buildProject.InnerInstance, relativeTargetPath, location));
 
             // notify the project system of the change
             UpdateImportStamp(EnvDTEProject);
@@ -85,13 +93,77 @@ namespace NuGet.PackageManagement.VisualStudio
         {
             await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
 
-            await NuGetVS.ProjectHelper.DoWorkInWriterLockAsync(
-                EnvDTEProject,
-                VsHierarchyUtility.ToVsHierarchy(EnvDTEProject),
-                buildProject => MicrosoftBuildEvaluationProjectUtility.RemoveImportStatement(buildProject, relativeTargetPath));
+            // TODO: remove these wrappers when the proxy is present along the whole chain--we'll insert it here as a temp measure
+            ProxyProject proxyProject = new ProxyProject(EnvDTEProject);
+            await DoWorkInWriterLockAsync(
+                proxyProject,
+                new ProxyVsHierarchy(VsHierarchyUtility.ToVsHierarchy(EnvDTEProject)),
+                buildProject => MicrosoftBuildEvaluationProjectUtility.RemoveImportStatement(buildProject.InnerInstance, relativeTargetPath));
 
             // notify the project system of the change
             UpdateImportStamp(EnvDTEProject);
+        }
+
+        public static async Task DoWorkInWriterLockAsync(Project project, IVsHierarchy hierarchy, Action<MsBuildProject> action)
+        {
+            await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
+
+            var vsProject = hierarchy.As<IVsProject>();
+            UnconfiguredProject unconfiguredProject = GetUnconfiguredProject(vsProject);
+            if (unconfiguredProject != null)
+            {
+                var service = unconfiguredProject.ProjectService_proxy.Services_proxy.ProjectLockService_proxy;
+                if (service != null)
+                {
+                    using (ProjectWriteLockReleaser x = await service.WriteLockAsync_proxy())
+                    {
+                        await x.CheckoutAsync(unconfiguredProject.FullPath);
+
+                        // TODO - originally:
+                        //
+                        // ConfiguredProject configuredProject = await unconfiguredProject.GetSuggestedConfiguredProjectAsync();
+                        //
+                        // Change this to make less of a proxy footprint in code
+                        ConfiguredProject configuredProject = (ConfiguredProject)await Utility.TaskCast<ProxyConfiguredProject>(
+                            () => unconfiguredProject.GetSuggestedConfiguredProjectAsync());
+
+                        MsBuildProject buildProject = await x.GetProjectAsync(configuredProject);
+
+                        if (buildProject != null)
+                        {
+                            action(buildProject);
+                        }
+
+                        await x.ReleaseAsync();
+                    }
+
+                    await unconfiguredProject.ProjectService.Services.ThreadingPolicy.SwitchToUIThread();
+                    project.Save();
+                }
+            }
+        }
+
+        private static UnconfiguredProject GetUnconfiguredProject(IVsProject project)
+        {
+            IVsBrowseObjectContext context = project.As<IVsBrowseObjectContext>();
+            if (context == null)
+            {
+                IVsHierarchy hierarchy = project as IVsHierarchy;
+                if (hierarchy != null)
+                {
+                    object extObject;
+                    if (ErrorHandler.Succeeded(hierarchy.GetProperty((uint)VSConstants.VSITEMID.Root, (int)__VSHPROPID.VSHPROPID_ExtObject, out extObject)))
+                    {
+                        Project dteProject = extObject as Project;
+                        if (dteProject != null)
+                        {
+                            context = dteProject.Object as IVsBrowseObjectContext;
+                        }
+                    }
+                }
+            }
+
+            return context != null ? (UnconfiguredProject)context.UnconfiguredProject : null;
         }
     }
 }
