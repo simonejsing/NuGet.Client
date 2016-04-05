@@ -29,6 +29,7 @@ namespace NuGet.Commands
             }
 
             PackageUpdateResource packageUpdateResource = await CommandRunnerUtility.GetPackageUpdateResource(sourceProvider, source);
+            await packageUpdateResource.TryCacheCredentials(logger);
 
             string symbolsSource = !noSymbols
                 ? NuGetConstants.DefaultSymbolServerUrl

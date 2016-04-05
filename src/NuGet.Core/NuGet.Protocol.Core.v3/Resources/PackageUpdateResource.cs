@@ -36,6 +36,31 @@ namespace NuGet.Protocol.Core.Types
             _httpSource = httpSource;
         }
 
+        public async Task<bool> TryCacheCredentials(ILogger log)
+        {
+            if (_httpSource != null)
+            {
+                Uri sourceUri = new Uri(_source);
+
+                if (CredentialStore.Instance.GetCredentials(sourceUri) == null)
+                {
+                    using (CancellationTokenSource tokenSource = new CancellationTokenSource())
+                    {
+                        try
+                        {
+                            await _httpSource.HeadAsync(sourceUri, true, log, tokenSource.Token);
+                        }
+                        catch (HttpRequestException)
+                        {
+                            return false;
+                        }
+                    }
+                }
+            }
+
+            return true;
+        }
+
         public async Task Push(
             string packagePath,
             string symbolsSource, // empty to not push symbols

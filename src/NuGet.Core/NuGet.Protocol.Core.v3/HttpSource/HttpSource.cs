@@ -229,6 +229,28 @@ namespace NuGet.Protocol
                 token: token);
         }
 
+        public async Task<HttpStatusCode> HeadAsync(
+            Uri uri,
+            bool ignoreNotFounds,
+            ILogger log,
+            CancellationToken token)
+        {
+            Func<Task<HttpResponseMessage>> request = () => SendWithCredentialSupportAsync(
+                () => new HttpRequestMessage(HttpMethod.Head, uri),
+                log,
+                token);
+
+            using (HttpResponseMessage response = await request())
+            {
+                if (!ignoreNotFounds || response.StatusCode != HttpStatusCode.NotFound)
+                {
+                    response.EnsureSuccessStatusCode();
+                }
+
+                return response.StatusCode;
+            }
+        }
+
         private async Task<HttpSourceResult> GetAsync(
             Uri uri,
             bool ignoreNotFounds,
