@@ -17,9 +17,6 @@
   "compileExclude": [
     "../../../submodules/FileSystem/src/**/AssemblyInfo.cs"
   ],
-  "preprocess": [
-    "../../../tools/compiler/preprocess/Internalization.cs"
-  ],
   "dependencies": {
     "NuGet.Client": {
       "target": "project"
@@ -75,15 +72,7 @@
       ],
       "dependencies": {
         "NETStandard.Library": "1.5.0-rc2-23931",
-        "System.Xml.XDocument": "4.0.11-rc2-23931",
-        "Microsoft.CodeAnalysis.CSharp": {
-          "version": "1.1.1",
-          "type": "build"
-        },
-        "Microsoft.Dnx.Compilation.CSharp.Abstractions": {
-          "version": "1.0.0-rc1-final",
-          "type": "build"
-        }
+        "System.Xml.XDocument": "4.0.11-rc2-23931"
       }
     }
   }
