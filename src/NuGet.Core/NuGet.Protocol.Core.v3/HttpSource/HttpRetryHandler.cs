@@ -86,6 +86,8 @@ namespace NuGet.Protocol
                             Strings.Http_RequestLog,
                             request.Method,
                             requestUri));
+                        
+                        response?.Dispose();
 
                         response = await TimeoutUtility.StartWithTimeout(
                             timeoutToken => client.SendAsync(request, completionOption, timeoutToken),
