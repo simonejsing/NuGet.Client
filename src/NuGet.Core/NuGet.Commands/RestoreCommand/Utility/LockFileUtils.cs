@@ -321,7 +321,7 @@ namespace NuGet.Commands
                         object locale;
                         if (item.Properties.TryGetValue("locale", out locale))
                         {
-                            newItem.Properties["locale"] = locale as string;
+                            newItem.Properties["locale"] = (string)locale;
                         }
                         yield return newItem;
                     }
