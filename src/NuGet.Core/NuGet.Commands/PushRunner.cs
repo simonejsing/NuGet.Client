@@ -1,6 +1,6 @@
 ﻿using System.Threading.Tasks;
 using NuGet.Configuration;
-using NuGet.Logging;
+using NuGet.Common;
 using NuGet.Protocol.Core.Types;
 
 namespace NuGet.Commands
